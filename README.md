@@ -1,0 +1,1 @@
+# hardened-archlinux-guide
