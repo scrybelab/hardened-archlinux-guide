@@ -1,4 +1,4 @@
-# hardened-archlinux-guide# hardened-archlinux-guide
+# hardened-archlinux-guide
 
 ## Target Configuration
 - **Hardware:** AMD CPU/GPU, NVMe Drive (`/dev/nvme0n1`), Intel AX200/AX210 Wi-Fi
@@ -29,6 +29,9 @@ iwctl
 ```bash
 timedatectl set-ntp true
 ```
+
+> [!WARNING]
+> **Destructive Operation:** The following `fdisk` and `cryptsetup` commands will completely erase all data on `/dev/nvme0n1`. Verify your target drive carefully before proceeding.
 
 ### 04. Partition the disk using fdisk:
 ```bash
