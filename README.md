@@ -245,7 +245,7 @@ iwctl
 [iwd]# exit
 
 # Verify dnscrypt-proxy is actively resolving
-doas systemctl status dnscrypt-proxy.socket
+doas systemctl status dnscrypt-proxy.service
 ping archlinux.org
 ```
 
