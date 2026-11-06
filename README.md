@@ -5,7 +5,7 @@
 - **Encryption:** LUKS2 + LVM (Root, Home, Swap)
 - **Filesystem:** ext4
 - **Bootloader:** Limine (UEFI)
-- **Network:** `iwd` + `dhcpcd` + `openresolv` (Quad9 DNS)
+- **Network:** `iwd` + `dhcpcd` + `dnscrypt-proxy` (DNS + DNSSEC)
 - **Security:** `opendoas`, `ufw`, hardened `sysctl` rules
 
 ### 01. Verify UEFI boot mode:
@@ -78,7 +78,7 @@ mount /dev/nvme0n1p1 /mnt/boot
 
 ### 09. Install the base system:
 ```bash
-pacstrap -K /mnt base linux linux-firmware-amdgpu linux-firmware-intel lvm2 iwd dhcpcd openresolv chrony fwupd reflector limine nano opendoas ufw amd-ucode mesa vulkan-radeon efibootmgr bash-completion
+pacstrap -K /mnt base linux linux-firmware-amdgpu linux-firmware-intel lvm2 iwd dhcpcd chrony fwupd reflector limine nano opendoas ufw amd-ucode mesa vulkan-radeon efibootmgr bash-completion dnscrypt-proxy
 ```
 
 ### 10. Generate the fstab file and configure volatile /tmp:
@@ -143,30 +143,35 @@ mkinitcpio -P
 passwd
 ```
 
-### 18. Configure Network, DNS, and Resolver Conflicts:
+### 18. Configure Network and Encrypted DNS:
 ```bash
-# Disable iwd's internal DHCP client to prevent conflicts with dhcpcd
+# 1. Disable iwd's internal DHCP client to prevent conflicts with dhcpcd
 mkdir -p /etc/iwd
 cat <<EOF > /etc/iwd/main.conf
 [General]
 EnableNetworkConfiguration=false
 EOF
 
-# Disable systemd networking services to prevent conflicts
+# 2. Disable conflicting systemd networking services
 systemctl disable systemd-timesyncd
 systemctl disable systemd-resolved
 
-# Configure dhcpcd to use openresolv
-cat <<EOF >> /etc/dhcpcd.conf
+# 3. Prevent dhcpcd from overwriting /etc/resolv.conf with plaintext
+echo "nohook resolv.conf" >> /etc/dhcpcd.conf
 
-# Quad9 DNS (Privacy-focused, blocks malicious domains, strict no-logging policy)
-static domain_name_servers=9.9.9.9 149.112.112.112 2620:fe::fe 2620:fe::9
+# 4. Configure dnscrypt-proxy for maximum privacy (Anonymized DNS + DNSSEC)
+# Routes queries through a relay so Quad9 sees the relay's IP, not yours.
+cat <<EOF > /etc/dnscrypt-proxy/dnscrypt-proxy.toml
+server_names = ['quad9-dnscrypt-ip4-filter-pri', 'quad9-dnscrypt-ip6-filter-pri']
+listen_addresses = ['127.0.0.1:53', '[::1]:53']
+require_dnssec = true
+anonymized_dns = true
 EOF
 ```
 
 ### 19. Enable required services to start on boot:
 ```bash
-systemctl enable iwd dhcpcd chronyd fwupd ufw tmp.mount
+systemctl enable iwd dhcpcd chronyd fwupd ufw dnscrypt-proxy.socket
 ```
 
 ### 20. Install and configure the Limine bootloader:
@@ -228,7 +233,9 @@ iwctl
 [iwd]# station wlan0 connect YOUR_SSID
 [iwd]# exit
 
-doas resolvconf -u
+# Verify dnscrypt-proxy is actively resolving
+doas systemctl status dnscrypt-proxy.socket
+ping archlinux.org
 ```
 
 ### Post-Installation Hardening (Developer-Friendly)
