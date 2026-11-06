@@ -88,7 +88,7 @@ genfstab -U /mnt >> /mnt/etc/fstab
 # Volatile /tmp: Limited to 2G to prevent RAM exhaustion.
 echo 'tmpfs /tmp tmpfs rw,nosuid,nodev,relatime,size=2G,mode=1777 0 0' >> /mnt/etc/fstab
 
-# volatile /var/crash: Core dumps write to the ram only and clears on reboot.
+# Volatile /var/crash: Core dumps write to RAM only and clear on reboot.
 mkdir -p /mnt/var/crash
 echo 'tmpfs /var/crash tmpfs rw,nosuid,nodev,noexec,size=512M,mode=0700 0 0' >> /mnt/etc/fstab
 ```
@@ -156,11 +156,13 @@ EOF
 systemctl disable systemd-timesyncd
 systemctl disable systemd-resolved
 
-# 3. Prevent dhcpcd from overwriting /etc/resolv.conf with plaintext
+# 3. Prevent dhcpcd from overwriting /etc/resolv.conf with plaintext DNS
 echo "nohook resolv.conf" >> /etc/dhcpcd.conf
 
-# 4. Configure dnscrypt-proxy for maximum privacy (Anonymized DNS + DNSSEC)
-# Routes queries through a relay so Quad9 sees the relay's IP, not yours.
+# 4. Seed resolv.conf to ensure localhost resolution on first boot
+echo "nameserver 127.0.0.1" > /etc/resolv.conf
+
+# 5. Configure dnscrypt-proxy for maximum privacy (DNSSEC + Quad9)
 cat <<EOF > /etc/dnscrypt-proxy/dnscrypt-proxy.toml
 server_names = ['quad9-dnscrypt-ip4-filter-pri', 'quad9-dnscrypt-ip6-filter-pri']
 listen_addresses = ['127.0.0.1:53', '[::1]:53']
@@ -179,7 +181,8 @@ EOF
 
 ### 19. Enable required services to start on boot:
 ```bash
-systemctl enable iwd dhcpcd chronyd fwupd ufw dnscrypt-proxy.socket
+# Note: We use .service instead of .socket to avoid port 53 binding race conditions.
+systemctl enable iwd dhcpcd chronyd fwupd ufw dnscrypt-proxy.service
 ```
 
 ### 20. Install and configure the Limine bootloader:
